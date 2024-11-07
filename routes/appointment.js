@@ -1,7 +1,6 @@
 import express from 'express';
 import AppointmentsCollection from '../models/appointment.js';
 import { generateServiceId, generateAppointmentId } from '../helpers/idGenerator.js';
-import Inventory from '../models/inventory.js';
 
 const router = express.Router();
 
@@ -39,8 +38,9 @@ router.post('/', async (req, res) => {
     });
 
     if (existingAppointments.length > 0) {
+      const AppointmentsArray = existingAppointments[0];
       // console.log('Existing appointments:', existingAppointments);
-      return res.status(400).json({ error: 'Cannot create a new appointment until all services are completed for the current vehicle.', existingAppointments });
+      return res.status(200).json({ error: 'Cannot', AppointmentsArray } );
     }
 
     // Generate a unique appointment ID
@@ -55,9 +55,9 @@ router.post('/', async (req, res) => {
     // Save the new appointment to the database
     await newAppointment.save();
     console.log('New appointment created:', newAppointment);
-
+    const AppointmentsArray = newAppointment;
     // Respond with the created appointment
-    res.status(201).json(newAppointment);
+    res.status(201).json({ error: 'Yes', AppointmentsArray });
   } catch (error) {
     console.log('Error creating appointment:', error);
     res.status(400).json({ error: 'Error creating appointment', details: error.message });
@@ -181,9 +181,10 @@ router.use(express.json());
 // Helper function to add services
 async function addServices(req, res, serviceType) {
   try {
+    // Log the incoming request data
     console.log(`Incoming request data for ${serviceType}:`, JSON.stringify(req.body, null, 2));
 
-    const services = req.body;
+    const services = req.body; // Assuming an array of services is sent
 
     if (!Array.isArray(services) || services.length === 0) {
       return res.status(400).json({ error: 'No services provided' });
@@ -198,12 +199,15 @@ async function addServices(req, res, serviceType) {
     for (const service of services) {
       const { service_description, price, items_required, status } = service;
 
+      // Log the service data being processed
       console.log(`Processing service for ${serviceType}:`, JSON.stringify(service, null, 2));
 
+      // Validate required fields
       if (!service_description || !price || !status || !Array.isArray(items_required) || items_required.length === 0) {
         return res.status(400).json({ error: 'Missing required fields: service_description, price, status, or items_required' });
       }
 
+      // Validate enum values
       const validStatuses = ['approved', 'pending', 'rejected'];
       if (!validStatuses.includes(status)) {
         return res.status(400).json({ error: `Invalid status value. Must be one of: ${validStatuses.join(', ')}` });
@@ -211,31 +215,11 @@ async function addServices(req, res, serviceType) {
 
       const service_id = await generateServiceId();
 
-      // Update inventory quantities
-      if (serviceType === 'services_actual') {
-        for (const item of items_required) {
-          const { item_id, quantity } = item; // Assuming quantity is part of items_required
-
-          const inventoryItem = await Inventory.findOne({ inventory_id: item_id });
-          if (!inventoryItem) {
-            return res.status(404).json({ error: `Inventory item with ID ${item_id} not found` });
-          }
-
-          // Decrease the inventory quantity
-          inventoryItem.quantity -= quantity;
-          if (inventoryItem.quantity < 0) {
-            return res.status(400).json({ error: `Insufficient inventory for item ID ${item_id}` });
-          }
-
-          await inventoryItem.save();
-        }
-      }
-
       await AppointmentsCollection.updateOne(
         { appointment_id: req.params.appointment_id },
         {
           $push: {
-            [serviceType]: { service_id, service_description, price, items_required, status }
+            [serviceType]: { service_id, service_description, price, items_required, status, service_type }
           }
         }
       );
@@ -264,6 +248,5 @@ router.get('/:appointment_id/services_actual', async (req, res) => {
   const services = await AppointmentsCollection.findOne({ appointment_id: req.params.appointment_id }, { services_actual: 1 });
   res.status(200).json(services);
 });
-
 
 export default router;

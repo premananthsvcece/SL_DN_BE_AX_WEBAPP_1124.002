@@ -55,6 +55,7 @@ const appointmentSchema = new mongoose.Schema(
           required: true
         },
         price: { type: Number, required: true },
+        service_type: { type: String, required: true },
         items_required: [
           {
             item_id: { type: String, required: true },
