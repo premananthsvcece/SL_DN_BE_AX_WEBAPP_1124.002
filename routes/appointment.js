@@ -1,46 +1,26 @@
-import express from 'express';
-import AppointmentsCollection from '../models/appointment.js';
-import { generateServiceId, generateAppointmentId } from '../helpers/idGenerator.js';
+import express from "express";
+import AppointmentsCollection from "../models/appointment.js";
+import {
+  generateServiceId,
+  generateAppointmentId,
+} from "../helpers/idGenerator.js";
 
 const router = express.Router();
 
-// router.post('/', async (req, res) => {
-//   try {
-//     // Generate a unique appointment ID
-//     const appointment_id = await generateAppointmentId();
-
-//     // Create a new appointment object with the provided data and generated ID
-//     const newAppointment = new AppointmentsCollection({
-//       ...req.body,
-//       appointment_id,
-//     });
-//     // console.log(req.body);
-
-//     // Save the new appointment to the database
-//     await newAppointment.save();
-
-//     // Respond with the created appointment
-//     res.status(201).json(newAppointment);
-//   } catch (error) {
-//     console.log('Error creating appointment:', error);
-//     res.status(400).json({ error: 'Error creating appointment', details: error.message });
-//   }
-// });
-
-router.post('/', async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const { vehicle_id } = req.body;
 
     // Check if there are any incomplete services for the given vehicle_id
     const existingAppointments = await AppointmentsCollection.find({
       vehicle_id,
-      'services_actual.service_status': { $ne: 'Completed' }
+      "services_actual.service_status": { $ne: "Completed" },
     });
 
     if (existingAppointments.length > 0) {
       const AppointmentsArray = existingAppointments[0];
       // console.log('Existing appointments:', existingAppointments);
-      return res.status(200).json({ error: 'Cannot', AppointmentsArray } );
+      return res.status(200).json({ error: "Cannot", AppointmentsArray });
     }
 
     // Generate a unique appointment ID
@@ -54,97 +34,158 @@ router.post('/', async (req, res) => {
 
     // Save the new appointment to the database
     await newAppointment.save();
-    console.log('New appointment created:', newAppointment);
+    console.log("New appointment created:", newAppointment);
     const AppointmentsArray = newAppointment;
     // Respond with the created appointment
-    res.status(201).json({ error: 'Yes', AppointmentsArray });
+    res.status(201).json({ error: "Yes", AppointmentsArray });
   } catch (error) {
-    console.log('Error creating appointment:', error);
-    res.status(400).json({ error: 'Error creating appointment', details: error.message });
+    console.log("Error creating appointment:", error);
+    res
+      .status(400)
+      .json({ error: "Error creating appointment", details: error.message });
   }
 });
 // Add services to services_estimate
-router.post('/:appointment_id/services_estimate', async (req, res) => {
+router.post("/:appointment_id/services_estimate", async (req, res) => {
   try {
     // Log the incoming request data
-    console.log('Incoming request data:', JSON.stringify(req.body, null, 2));
+    console.log("Incoming request data:", JSON.stringify(req.body, null, 2));
 
     const services = req.body; // Assuming an array of services is sent
 
     if (!Array.isArray(services) || services.length === 0) {
-      return res.status(400).json({ error: 'No services provided' });
+      return res.status(400).json({ error: "No services provided" });
     }
 
-    const appointment = await AppointmentsCollection.findOne({ appointment_id: req.params.appointment_id });
+    const appointment = await AppointmentsCollection.findOne({
+      appointment_id: req.params.appointment_id,
+    });
 
     if (!appointment) {
-      return res.status(404).json({ error: 'Appointment not found' });
+      return res.status(404).json({ error: "Appointment not found" });
     }
 
     for (const service of services) {
-      const { service_description, price, items_required, status } = service;
+      const {
+        service_id,
+        service_description,
+        price,
+        items_required,
+        status,
+        service_type,
+      } = service;
 
       // Log the service data being processed
-      console.log('Processing service:', JSON.stringify(service, null, 2));
+      console.log("Processing service:", JSON.stringify(service, null, 2));
 
       // Validate required fields
-      if (!service_description || !price || !status || !Array.isArray(items_required) || items_required.length === 0) {
-        return res.status(400).json({ error: 'Missing required fields: service_description, price, status, or items_required' });
+      if (
+        !service_description ||
+        !price ||
+        !status ||
+        !Array.isArray(items_required) ||
+        items_required.length === 0
+      ) {
+        return res.status(400).json({
+          error:
+            "Missing required fields: service_description, price, status, or items_required",
+        });
       }
 
       // Validate enum values
-      const validStatuses = ['approved', 'pending', 'rejected'];
+      const validStatuses = ["approved", "pending", "rejected", "saved", "released"];
       if (!validStatuses.includes(status)) {
-        return res.status(400).json({ error: `Invalid status value. Must be one of: ${validStatuses.join(', ')}` });
+        return res.status(400).json({
+          error: `Invalid status value. Must be one of: ${validStatuses.join(
+            ", "
+          )}`,
+        });
       }
 
-      const service_id = await generateServiceId();
-
-      await AppointmentsCollection.updateOne(
-        { appointment_id: req.params.appointment_id },
-        {
-          $push: {
-            services_estimate: { service_id, service_description, price, items_required, status }
+      if (service.service_id != "") {
+        await AppointmentsCollection.updateOne(
+          { appointment_id: req.params.appointment_id,
+            'services_estimate.service_id': service.service_id,
+          },
+          {
+            $set: {
+              services_estimate: {
+                service_id,
+                service_description,
+                price,
+                items_required,
+                status,
+                service_type,
+              },
+            },
           }
-        }
-      );
+        );
+      } else {
+         const service_id = await generateServiceId();
+        await AppointmentsCollection.updateOne(
+          { appointment_id: req.params.appointment_id },
+          {
+            $push: {
+              services_estimate: {
+                service_id,
+                service_description,
+                price,
+                items_required,
+                status,
+                service_type,
+              },
+            },
+          }
+        );
+      }
+
+
     }
 
-    const updatedAppointment = await AppointmentsCollection.findOne({ appointment_id: req.params.appointment_id });
+    const updatedAppointment = await AppointmentsCollection.findOne({
+      appointment_id: req.params.appointment_id,
+    });
     res.status(200).json(updatedAppointment);
   } catch (error) {
-    console.log('Error adding services to services_estimate:', error);
-    res.status(400).json({ error: 'Error adding services to services_estimate', details: error.message });
+    console.log("Error adding services to services_estimate:", error);
+    res.status(400).json({
+      error: "Error adding services to services_estimate",
+      details: error.message,
+    });
   }
 });
 
-
-
 // Get all appointments
-router.get('/', async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const appointments = await AppointmentsCollection.find();
     res.status(200).json(appointments);
   } catch (error) {
-    res.status(500).json({ error: 'Error fetching appointments', details: error.message });
+    res
+      .status(500)
+      .json({ error: "Error fetching appointments", details: error.message });
   }
 });
 
 // Get a single appointment by appointment_id
-router.get('/:appointment_id', async (req, res) => {
+router.get("/:appointment_id", async (req, res) => {
   try {
-    const appointment = await AppointmentsCollection.findOne({ appointment_id: req.params.appointment_id });
+    const appointment = await AppointmentsCollection.findOne({
+      appointment_id: req.params.appointment_id,
+    });
     if (!appointment) {
-      return res.status(404).json({ error: 'Appointment not found' });
+      return res.status(404).json({ error: "Appointment not found" });
     }
     res.status(200).json(appointment);
   } catch (error) {
-    res.status(500).json({ error: 'Error fetching appointment', details: error.message });
+    res
+      .status(500)
+      .json({ error: "Error fetching appointment", details: error.message });
   }
 });
 
 // Update an appointment by appointment_id
-router.put('/:appointment_id', async (req, res) => {
+router.put("/:appointment_id", async (req, res) => {
   try {
     const appointment = await AppointmentsCollection.findOneAndUpdate(
       { appointment_id: req.params.appointment_id },
@@ -152,28 +193,32 @@ router.put('/:appointment_id', async (req, res) => {
       { new: true, runValidators: true }
     );
     if (!appointment) {
-      return res.status(404).json({ error: 'Appointment not found' });
+      return res.status(404).json({ error: "Appointment not found" });
     }
     res.status(200).json(appointment);
   } catch (error) {
-    res.status(400).json({ error: 'Error updating appointment', details: error.message });
+    res
+      .status(400)
+      .json({ error: "Error updating appointment", details: error.message });
   }
 });
 
 // Delete an appointment by appointment_id
-router.delete('/:appointment_id', async (req, res) => {
+router.delete("/:appointment_id", async (req, res) => {
   try {
-    const appointment = await AppointmentsCollection.findOneAndDelete({ appointment_id: req.params.appointment_id });
+    const appointment = await AppointmentsCollection.findOneAndDelete({
+      appointment_id: req.params.appointment_id,
+    });
     if (!appointment) {
-      return res.status(404).json({ error: 'Appointment not found' });
+      return res.status(404).json({ error: "Appointment not found" });
     }
-    res.status(200).json({ message: 'Appointment deleted successfully' });
+    res.status(200).json({ message: "Appointment deleted successfully" });
   } catch (error) {
-    res.status(500).json({ error: 'Error deleting appointment', details: error.message });
+    res
+      .status(500)
+      .json({ error: "Error deleting appointment", details: error.message });
   }
 });
-
-
 
 // Middleware to parse JSON bodies
 router.use(express.json());
@@ -182,71 +227,157 @@ router.use(express.json());
 async function addServices(req, res, serviceType) {
   try {
     // Log the incoming request data
-    console.log(`Incoming request data for ${serviceType}:`, JSON.stringify(req.body, null, 2));
+    console.log(
+      `Incoming request data for ${serviceType}:`,
+      JSON.stringify(req.body, null, 2)
+    );
 
     const services = req.body; // Assuming an array of services is sent
+    // console.log(services);
 
     if (!Array.isArray(services) || services.length === 0) {
-      return res.status(400).json({ error: 'No services provided' });
+      // console.log(error)
+      return res.status(400).json({ error: "No services provided" });
     }
 
-    const appointment = await AppointmentsCollection.findOne({ appointment_id: req.params.appointment_id });
+    const appointment = await AppointmentsCollection.findOne({
+      appointment_id: req.params.appointment_id,
+    });
 
     if (!appointment) {
-      return res.status(404).json({ error: 'Appointment not found' });
+      return res.status(404).json({ error: "Appointment not found" });
     }
 
     for (const service of services) {
-      const { service_description, price, items_required, status } = service;
+      const {
+        service_id,
+        service_description,
+        price,
+        items_required,
+        status,
+        service_type,
+        service_status,
+      } = service;
 
       // Log the service data being processed
-      console.log(`Processing service for ${serviceType}:`, JSON.stringify(service, null, 2));
+      console.log(
+        `Processing service for ${serviceType}:`,
+        JSON.stringify(service, null, 2)
+      );
 
       // Validate required fields
-      if (!service_description || !price || !status || !Array.isArray(items_required) || items_required.length === 0) {
-        return res.status(400).json({ error: 'Missing required fields: service_description, price, status, or items_required' });
+      if (
+        !service_description ||
+        !price ||
+        !status ||
+        !Array.isArray(items_required) ||
+        items_required.length === 0
+      ) {
+        return res.status(400).json({
+          error:
+            "Missing required fields: service_description, price, status, or items_required",
+        });
       }
 
       // Validate enum values
-      const validStatuses = ['approved', 'pending', 'rejected'];
+      const validStatuses = ["approved", "pending", "rejected", "saved", "released"];
       if (!validStatuses.includes(status)) {
-        return res.status(400).json({ error: `Invalid status value. Must be one of: ${validStatuses.join(', ')}` });
+        return res.status(400).json({
+          error: `Invalid status value. Must be one of: ${validStatuses.join(
+            ", "
+          )}`,
+        });
       }
-
-      const service_id = await generateServiceId();
-
-      await AppointmentsCollection.updateOne(
-        { appointment_id: req.params.appointment_id },
-        {
-          $push: {
-            [serviceType]: { service_id, service_description, price, items_required, status, service_type }
+      if (service.service_id != "") {
+        await AppointmentsCollection.updateOne(
+          { appointment_id: req.params.appointment_id,
+            'services_actual.service_id': service.service_id,
+          },
+          {
+            $set: {
+              services_actual: {
+                service_id,
+                service_description,
+                price,
+                items_required,
+                status,
+                service_type,
+                service_status,
+              },
+            },
           }
-        }
-      );
+        );
+      } else {
+         const service_id = await generateServiceId();
+        await AppointmentsCollection.updateOne(
+          { appointment_id: req.params.appointment_id },
+          {
+            $push: {
+              services_actual: {
+                service_id,
+                service_description,
+                price,
+                items_required,
+                status,
+                service_type,
+                service_status,
+              },
+            },
+          }
+        );
+      }
     }
 
-    const updatedAppointment = await AppointmentsCollection.findOne({ appointment_id: req.params.appointment_id });
+    const updatedAppointment = await AppointmentsCollection.findOne({
+      appointment_id: req.params.appointment_id,
+    });
     res.status(200).json(updatedAppointment);
   } catch (error) {
     console.log(`Error adding services to ${serviceType}:`, error);
-    res.status(400).json({ error: `Error adding services to ${serviceType}`, details: error.message });
+    res.status(400).json({
+      error: `Error adding services to ${serviceType}`,
+      details: error.message,
+    });
   }
 }
 
 // Add services to services_estimate
-router.post('/:appointment_id/services_estimate', (req, res) => {
-  addServices(req, res, 'services_estimate');
+router.post("/:appointment_id/services_estimate", (req, res) => {
+  addServices(req, res, "services_estimate");
 });
 
 // Add services to services_actual
-router.post('/:appointment_id/services_actual', (req, res) => {
-  addServices(req, res, 'services_actual');
+router.post("/:appointment_id/services_actual", (req, res) => {
+  addServices(req, res, "services_actual");
 });
 
 //get services_actual data by appoinment id
-router.get('/:appointment_id/services_actual', async (req, res) => {
-  const services = await AppointmentsCollection.findOne({ appointment_id: req.params.appointment_id }, { services_actual: 1 });
+router.get("/:appointment_id/services_actual", async (req, res) => {
+  const services = await AppointmentsCollection.findOne(
+    { appointment_id: req.params.appointment_id },
+    { services_actual: 1 }
+  );
   res.status(200).json(services);
+});
+
+//assign mechanic to appointment
+router.post('/:appointment_id/assign_mechanic', async (req, res) => {
+  const { mechanic_id } = req.body;
+  const appointment = await AppointmentsCollection.findOneAndUpdate({ appointment_id: req.params.appointment_id }, { mechanic_id }, { new: true });
+  res.status(200).json(appointment);
+});
+
+//update km of appointment
+router.put('/:appointment_id/update_km', async (req, res) => {
+  const { km } = req.body;
+  const appointment = await AppointmentsCollection.findOneAndUpdate({ appointment_id: req.params.appointment_id }, { km }, { new: true });
+  res.status(200).json(appointment);
+});
+//update each service status in services_actual by service_id
+router.put('/:appointment_id/update_service_status/:service_id', async (req, res) => {
+  const { service_status } = req.body;
+  const appointment = await AppointmentsCollection.findOneAndUpdate({ appointment_id: req.params.appointment_id, 'services_actual.service_id': req.params.service_id }, { $set: { 'services_actual.$.service_status': service_status } }, { new: true });
+  res.status(200).json(appointment);
 });
 
 export default router;

@@ -11,7 +11,8 @@ import authRoutes from "./routes/auth.js";
 import inventoryRoutes from "./routes/inventory.js";
 import jobCardRoutes from "./routes/jobCard.js";
 import appointmentRoutes from "./routes/appointment.js";
-
+import procurementRoutes from "./routes/procurement.js";
+import mechanicRoutes from "./routes/mechanic.js";
 dotenv.config();
 
 const app = express();
@@ -39,7 +40,8 @@ app.use("/inventory", inventoryRoutes);
 app.use("/vehicle", vehicleRoutes);
 app.use("/jobcard", jobCardRoutes);
 app.use("/appointment", appointmentRoutes);
-
+app.use("/procurement", procurementRoutes);
+app.use("/mechanic", mechanicRoutes);
 // Start the server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);

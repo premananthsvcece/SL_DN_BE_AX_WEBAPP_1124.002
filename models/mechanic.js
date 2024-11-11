@@ -19,7 +19,7 @@ const mechanicSchema = new mongoose.Schema(
 const Mechanic = mongoose.model(
   "Mechanic",
   mechanicSchema,
-  "MechanicCollection"
+  "MechanicsCollection"
 );
 
 export default Mechanic;

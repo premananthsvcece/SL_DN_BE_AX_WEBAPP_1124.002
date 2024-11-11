@@ -18,6 +18,7 @@ const appointmentSchema = new mongoose.Schema(
       ref: "MechanicsCollection",
       required: false,
     },
+    km: { type: Number, required: false },
     services_estimate: [
       {
         service_id: {
@@ -27,6 +28,7 @@ const appointmentSchema = new mongoose.Schema(
         },
         service_description: { type: String, required: true },
         price: { type: Number, required: true },
+        service_type: { type: String, required: true },
         items_required: [
           {
             item_id: { type: String, required: true },
@@ -35,7 +37,7 @@ const appointmentSchema = new mongoose.Schema(
         ],
         status: {
           type: String,
-          enum: ["approved", "pending", "rejected"],
+          enum: ["approved", "pending", "rejected", "saved"],
           required: true,
         },
       },
@@ -48,18 +50,26 @@ const appointmentSchema = new mongoose.Schema(
           required: true,
         },
         service_description: { type: String, required: true },
+        status: {
+          type: String,
+          enum: ["approved", "pending", "rejected", "saved"],
+          required: false,
+        },
         service_status: {
           type: String,
-          enum: ['Not Started', 'Completed'],  
-          default: 'Not Started',  
-          required: true
+          enum: ["scheduled", "completed", "canceled", "saved", "approved"],
+          default: "scheduled",
         },
         price: { type: Number, required: true },
+        // estimate_amount: { type: Number, required: true },
         service_type: { type: String, required: true },
         items_required: [
           {
             item_id: { type: String, required: true },
             item_name: { type: String, required: true },
+            qty: { type: String, required: false },
+            tax: { type: String, required: false },
+            discount: { type: String, required: false },
           },
         ],
       },
@@ -68,7 +78,7 @@ const appointmentSchema = new mongoose.Schema(
     appointment_time: { type: String, required: false }, // Store time as a string in HH:MM format
     status: {
       type: String,
-      enum: ["scheduled", "completed", "canceled"],
+      enum: ["scheduled", "completed", "canceled", "saved", "approved"],
       default: "scheduled",
     },
     telecaller: { type: String, required: true }, // "self" or the name of the employee
