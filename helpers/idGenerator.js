@@ -1,18 +1,17 @@
-import NumberRange from '../models/NumberRange.js';
+import knexLib from 'knex';
+import knexConfig from '../knexfile.js'; // Import your Knex configuration
 
-/**
- * Generates a custom ID based on a given entity short name.
- * The custom ID is generated based on a range defined for the entity (prefix).
- *
- * @param {string} entityShortName - The prefix for the entity (e.g., 'CUST', 'VEH').
- * @returns {string} - The generated custom ID.
- */
+const knex = knexLib(knexConfig); // Initialize Knex with the configuration
+
+// Your existing generateCustomId function
 export async function generateCustomId(entityShortName) {
   try {
     console.log(`Searching for entity: ${entityShortName}`);
 
     // Find the number range by prefix (e.g., 'CUST', 'VEH', etc.)
-    const numberRange = await NumberRange.findOne({ prefix: entityShortName });
+    const numberRange = await knex('number_range')
+      .where({ prefix: entityShortName })
+      .first();
 
     // Log the result of the query
     console.log('Number range found:', numberRange);
@@ -23,22 +22,18 @@ export async function generateCustomId(entityShortName) {
       throw new Error(`Number range for ${entityShortName} not found`);
     }
 
-    // Convert range_start, range_end, and running_number to numbers for comparison
-    const rangeStart = parseInt(numberRange.range_start);
-    const rangeEnd = parseInt(numberRange.range_end);
-    const runningNumber = parseInt(numberRange.running_number);
-
     // Check if the range has been exhausted
-    if (runningNumber >= rangeEnd) {
+    if (numberRange.running_number >= numberRange.range_end) {
       throw new Error(`Number range for ${entityShortName} has been exhausted`);
     }
 
     // Generate the new ID based on the prefix and the incremented running number
-    const newId = `${entityShortName}-${runningNumber + 1}`;
+    const newId = `${entityShortName}-${numberRange.running_number + 1}`;
 
-    // Update the running number and save the changes to the database
-    numberRange.running_number = (runningNumber + 1).toString();
-    await numberRange.save();
+    // Update the running number in the database
+    await knex('number_range')
+      .where({ prefix: entityShortName })
+      .update({ running_number: numberRange.running_number + 1 });
 
     // Return the generated ID
     return newId;
@@ -71,4 +66,8 @@ export async function generateServiceId() {
 
 export async function generateAppointmentId() {
   return generateCustomId('APMT');
+}
+
+export async function generatePrNo() {
+  return generateCustomId('PR');
 }
